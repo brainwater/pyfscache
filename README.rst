@@ -4,23 +4,23 @@ pyfscache
 A simple filesystem cache for python. **This is a modified version that forks v0.9.12**
 
 Summary of changes in fork:
- - minor changes for Python 3 compatibility
- - use of pickle rather than cPickle
- - original cache key is now stored in the FSCache object, which permits later lookup of cached objects
- - keys are now a structure only of tuples of strings; all inspect.getArgSpec() calls as part of key 
-     creation are themselves serialized using pickle.dumps to produce a string version. This avoids 
-     segfaults on at least one platform and enables numpy array objects to be cached.
- - addition of user utility methods / functionality to FSCache class:
-   - _suppress_set_cache_error Boolean flag can be set after instance creation, allowing sets on existing
-      cache objects to silently fail. This is useful when re-running code segments that must ensure a
-      cache value is set without a fussy try-except clause. Used by force_cache_set and __setitem__.
-  - force_cache_set method to overwrite a cache entry if the object's key is already present. Avoids fussy
-      try-except clause in cases where user is confident about an overwrite policy.
-  - lookup_by_digest method to return the object cached by its digest string.
-  - lookup_by_object method to return the key of a cached object (reverse lookup).
-  - expire_by_object method to expire an object based on lookup_by_object.
-  - exist_object method to check presence of an object in the **loaded** cache.
+ - Minor changes for Python 3 compatibility
+ - Use of pickle rather than cPickle
+ - Original cache key is now stored in the FSCache object, which permits later lookup of cached objects
+ - Keys are now a structure only of tuples of strings; all inspect.getArgSpec() calls as part of key creation are themselves serialized using pickle.dumps to produce a string version. This avoids segfaults on at least one platform and enables numpy array objects to be cached.
+     
+ - Addition of user utility methods / functionality to FSCache class
 
+   - _suppress_set_cache_error Boolean flag can be set after instance creation, allowing sets on existing cache objects to silently fail. This is useful when re-running code segments that must ensure a cache value is set without a fussy try-except clause. Used by force_cache_set and __setitem__.
+
+   - force_cache_set method to overwrite a cache entry if the object's key is already present. Avoids fussy try-except clause in cases where user is confident about an overwrite policy.
+      
+   - lookup_by_digest method to return the object cached by its digest string.
+   - lookup_by_object method to return the key of a cached object (reverse lookup).
+   - expire_by_object method to expire an object based on lookup_by_object.
+   - exist_object method to check presence of an object in the **loaded** cache.
+   
+   
 Home Page, Documentation, & Repository
 --------------------------------------
 

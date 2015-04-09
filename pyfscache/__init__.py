@@ -3,6 +3,8 @@
 '''
 pyfscache: A file system cache for python.
 Copyright (c) 2013, James C. Stroud; All rights reserved.
+
+This forked version modified by Robert Clewley.
 '''
 
 from _version import __version__

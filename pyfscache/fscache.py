@@ -1,14 +1,28 @@
 #! /usr/bin/env python
+"""
+Modified version of pyfscache at https://github.com/jcstroud/pyfscache
+  by J. C. Stroud.
+Uses pickle instead of cPickle for improved behavior of object lookup by key.
+All keys are now tuples of strings *only*.
 
+This version based on v0.9.8 and modified by R. H. Clewley
+Edits shown by `# RHC`
+"""
 import os
 import hashlib
-import cPickle
+# RHC
+import pickle as cPickle
+# You may get key lookup problems with actual cPickle
+#  on some platforms
 import time
 import base64
 import inspect
 
 __all__ = ["CacheError", "FSCache", "make_digest",
            "auto_cache_function", "cache_function", "to_seconds"]
+
+# RHC
+protocol = cPickle.HIGHEST_PROTOCOL  # for testing purposes
 
 class CacheError(Exception):
   pass
@@ -25,7 +39,7 @@ class CacheObject(object):
   like expirations some time in the far, far, distant future,
   if ever. So don't count on it unless someone writes a patch.
   """
-  def __init__(self, value, expiration=None):
+  def __init__(self, value, key, expiration=None):
     """
     Creates a new :class:`phyles.CacheObject` with an attribute
     ``value`` that is object passed by the `value` parameter. The
@@ -35,6 +49,8 @@ class CacheObject(object):
     object has no expiration.
     """
     self._value = value
+    # RHC
+    self.key = key
     self._expiration = expiration
   def get_value(self):
     return self._value
@@ -91,7 +107,7 @@ class FSCache(object):
       >>> from pyfscache import *
       >>> if os.path.exists('cache/dir'):
       ...   shutil.rmtree('cache/dir')
-      ... 
+      ...
       >>> c = FSCache('cache/dir', days=7)
       >>> c['some_key'] = "some_value"
       >>> c['some_key']
@@ -106,7 +122,7 @@ class FSCache(object):
       ... def doit(avalue):
       ...   print "had to call me!"
       ...   return "some other value"
-      ... 
+      ...
       >>> doit('some input')
       had to call me!
       'some other value'
@@ -148,6 +164,48 @@ class FSCache(object):
     self._path = os.path.abspath(path)
     if not os.path.exists(self._path):
       os.makedirs(self._path)
+    # RHC
+    self._suppress_set_cache_error = False   # default value
+    # record of cached keys from function decorators
+    # mapping to their hash (digest) values (keys for _loaded)
+    # and its inverse
+    self._loaded_keys_to_digest = {}
+    self._loaded_digest_to_keys = {}
+  def lookup_by_digest(self, digest):
+    """Returns object in cache based on knowledge of its key's digest.
+    Will load the object from the filesystem if not already loaded.
+    RHC added
+    """
+    # RHC
+    if digest in self._loaded:
+      value = self._loaded[digest].value
+    else:
+      msg = "No such key in cache: '%s'" % k
+      raise KeyError(msg)
+    return value
+  def lookup_object(self, obj):
+    """O(n) reverse lookup of object in *loaded* cache, to identify
+    its key and digest.
+    RHC added
+    """
+    # RHC
+    for digest, cache_obj in self._loaded.items():
+      if cache_obj.value is obj:
+        k = self._loaded_digest_to_keys[digest]
+        return k, digest
+    raise(CacheError, "No such object in cache")
+  # RHC
+  def exist_object(self, obj):
+    """Returns True or False as to whether object is in the
+    *loaded* cache.
+    RHC added
+    """
+    try:
+      k, d = self.lookup_object(obj)
+    except CacheError:
+      return False
+    else:
+      return True
   def __getitem__(self, k):
     """
     Returns the object stored for the key `k`. Will
@@ -171,15 +229,22 @@ class FSCache(object):
     digest = make_digest(k)
     path = os.path.join(self._path, digest)
     if (digest in self._loaded) or os.path.exists(path):
-      tmplt = ("Object for key `%s` exists\n." +
+      tmplt = ("Object for key `%s` exists.\n" +
                "Remove the old one before setting the new object.")
       msg = tmplt % str(k)
-      raise CacheError, msg
+      if not self._suppress_set_cache_error:
+        # silently fail to set (good when validating existence)
+        raise(CacheError, msg)
     else:
       expiry = self.expiry()
-      contents = CacheObject(v, expiration=expiry)
+      # RHC -- store key in CacheObject to assist later reverse lookup
+      contents = CacheObject(v, k, expiration=expiry)
       dump(contents, path)
       self._loaded[digest] = contents
+      # RHC
+      self._loaded_keys_to_digest[contents.key] = digest
+      self._loaded_digest_to_keys[digest] = contents.key
+
   def __delitem__(self, k):
     """
     Removes the object keyed by `k` from memory
@@ -191,9 +256,12 @@ class FSCache(object):
     digest = make_digest(k)
     if digest in self._loaded:
       del(self._loaded[digest])
+      # RHC
+      del(self._loaded_keys_to_digest[k])
+      del(self._loaded_digest_to_keys[digest])
     else:
       msg = "Object for key `%s` has not been loaded" % str(k)
-      raise CacheError, msg
+      raise(CacheError, msg)
   def __contains__(self, k):
     """
     Returns ``True`` if an object keyed by `k` is
@@ -247,8 +315,11 @@ class FSCache(object):
       contents = load(path)
     else:
       msg = "Object for key `%s` does not exist." % (k,)
-      raise CacheError, msg
+      raise(CacheError, msg)
     self._loaded[digest] = contents
+    # RHC
+    self._loaded_keys_to_digest[contents.key] = digest
+    self._loaded_digest_to_keys[digest] = contents.key
     return contents
   def _remove(self, k):
     """
@@ -288,6 +359,14 @@ class FSCache(object):
     """
     self._remove(k)
     del self[k]
+  # RHC
+  def expire_by_object(self, obj):
+    """
+    Use with care. This permanently removes the object
+    from the cache, both in the memory and in the filesystem.
+    """
+    k, d = self.lookup_object(obj)
+    self.expire(k)
   def get_path(self):
     """
     Returns the absolute path to the file system cache represented
@@ -300,6 +379,20 @@ class FSCache(object):
     If new items do not expire, then ``None`` is returned.
     """
     return self._lifetime
+  def force_cache_set(self, k, v):
+    """Force cache to accept new value for key k
+    """
+    # RHC
+    reset_suppress = self._suppress_set_cache_error
+    if reset_suppress:
+      self._suppress_set_cache_error = False
+    try:
+      self[k] = v
+    except CacheError:
+      self.load(k)
+      self.update_item(k, v)
+    if reset_suppress:
+      self._suppress_set_cache_error = True
   def update_item(self, k, v):
     """
     Use with care. Updates, both in memory and on the filesystem,
@@ -380,7 +473,8 @@ def make_digest(k):
   >>> make_digest(adict)
   'a2VKynHgDrUIm17r6BQ5QcA5XVmqpNBmiKbZ9kTu0A'
   """
-  s = cPickle.dumps(k)
+  # RHC reduced protocol
+  s = cPickle.dumps(k, protocol)
   h = hashlib.sha256(s).digest()
   b64 = base64.urlsafe_b64encode(h)[:-2]
   return b64.replace('-', '=')
@@ -401,7 +495,8 @@ def dump(obj, filename):
   into the file named by `filename`.
   """
   f = open(filename, 'wb')
-  cPickle.dump(obj, f, cPickle.HIGHEST_PROTOCOL)
+  # RHC
+  cPickle.dump(obj, f, protocol) #cPickle.HIGHEST_PROTOCOL)
   f.close()
 
 def auto_cache_function(f, cache):
@@ -410,7 +505,7 @@ def auto_cache_function(f, cache):
   The `cache` can be any mapping object, such as `FSCache` objects.
 
   The function arguments are expected to be well-behaved
-  for python's :py:mod:`cPickle`. Or, in other words, 
+  for python's :py:mod:`cPickle`. Or, in other words,
   the expected values for the parameters (the arguments) should
   be instances new-style classes (i.e. inheriting from
   :class:`object`) or implement :func:`__getstate__` with
@@ -421,11 +516,13 @@ def auto_cache_function(f, cache):
   """
   m = inspect.getmembers(f)
   try:
-    fid = (f.func_name, inspect.getargspec(f))
+    # RHC added str()
+    fid = (f.func_name, cPickle.dumps(inspect.getargspec(f), protocol))
   except (AttributeError, TypeError):
     fid = (f.__name__, repr(type(f)))
   def _f(*args, **kwargs):
-    k = (fid, args, kwargs)
+    # RHC -- make keys strings to avoid SegFaults
+    k = (fid, cPickle.dumps(args, protocol), cPickle.dumps(kwargs, protocol))
     if k in cache:
       result = cache[k]
     else:
@@ -434,7 +531,7 @@ def auto_cache_function(f, cache):
     return result
   return _f
 
-    
+
 def cache_function(f, keyer, cache):
   """
   Takes any function `f` and a function that creates a key,

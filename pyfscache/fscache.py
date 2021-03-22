@@ -157,7 +157,7 @@ class FSCache(object):
       self._lifetime = to_seconds(**kwargs)
       if self._lifetime <= 0:
         msg = "Lifetime (%s seconds) is 0 or less." % self._lifetime
-        raise LifetimeError, msg
+        raise LifetimeError(msg)
     else:
       self._lifetime = None
     self._loaded = {}
@@ -193,7 +193,7 @@ class FSCache(object):
       if cache_obj.value is obj:
         k = self._loaded_digest_to_keys[digest]
         return k, digest
-    raise(CacheError, "No such object in cache")
+    raise CacheError("No such object in cache")
   # RHC
   def exist_object(self, obj):
     """Returns True or False as to whether object is in the
@@ -234,7 +234,7 @@ class FSCache(object):
       msg = tmplt % str(k)
       if not self._suppress_set_cache_error:
         # silently fail to set (good when validating existence)
-        raise(CacheError, msg)
+        raise CacheError(msg)
     else:
       expiry = self.expiry()
       # RHC -- store key in CacheObject to assist later reverse lookup
@@ -261,7 +261,7 @@ class FSCache(object):
       del(self._loaded_digest_to_keys[digest])
     else:
       msg = "Object for key `%s` has not been loaded" % str(k)
-      raise(CacheError, msg)
+      raise CacheError(msg)
   def __contains__(self, k):
     """
     Returns ``True`` if an object keyed by `k` is
@@ -315,7 +315,7 @@ class FSCache(object):
       contents = load(path)
     else:
       msg = "Object for key `%s` does not exist." % (k,)
-      raise(CacheError, msg)
+      raise CacheError(msg)
     self._loaded[digest] = contents
     # RHC
     self._loaded_keys_to_digest[contents.key] = digest
@@ -334,7 +334,7 @@ class FSCache(object):
       os.remove(path)
     else:
       msg = "No object for key `%s` stored." % str(k)
-      raise CacheError, msg
+      raise CacheError(msg)
   def is_loaded(self, k):
     """
     Returns ``True`` if the item keyed by `k` has been loaded,

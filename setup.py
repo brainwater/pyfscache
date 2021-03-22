@@ -6,7 +6,10 @@ try:
   from StringIO import StringIO
 except ModuleNotFoundError:
   from io import StringIO
-from ConfigParser import ConfigParser
+try:
+  from ConfigParser import ConfigParser
+except ModuleNotFoundError:
+  from configparser import ConfigParser
 from setuptools import setup, find_packages
 
 # avoid sectionlesslessness (& case insensitivity) of ConfigParser

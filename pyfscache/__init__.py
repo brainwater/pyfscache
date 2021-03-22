@@ -7,7 +7,7 @@ Copyright (c) 2013, James C. Stroud; All rights reserved.
 This forked version modified by Robert Clewley.
 '''
 
-from _version import __version__
+from . _version import __version__
 
 from fscache import *
 import tests

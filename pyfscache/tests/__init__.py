@@ -1,6 +1,6 @@
 from unittest import TestSuite
 
-import test_fscache
+from . import test_fscache
 
 def test_suite():
   suite = TestSuite()

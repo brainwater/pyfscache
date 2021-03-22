@@ -5,7 +5,7 @@ import os
 try:
   from StringIO import StringIO
 except ModuleNotFoundError:
-  from os import StringIO
+  from io import StringIO
 from ConfigParser import ConfigParser
 from setuptools import setup, find_packages
 

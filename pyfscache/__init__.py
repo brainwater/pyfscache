@@ -9,7 +9,7 @@ This forked version modified by Robert Clewley.
 
 from . _version import __version__
 
-from fscache import *
+from . fscache import *
 import tests
 
 __all__ = ["FSCache", "make_digest",
